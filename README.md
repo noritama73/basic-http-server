@@ -123,7 +123,3 @@ $ curl -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2
 IjoxNzQ5NTU3MDI3LCJpYXQiOjE3NDk0NzA2Mjd9.3i3UwL1-dsQ7luMwS6vOYaVMiU_60TMbg6II7Sb0umA" http://localhost:8080/users/d4fd81f023f26b7acef2adc602ad0e77
 {"id":"d4fd81f023f26b7acef2adc602ad0e77","username":"testuser","email":"test@example.com","created_at":"2025-06-09T21:03:30.870816+09:00","updated_at":"2025-06-09T21:03:30.870816+09:00"}
 ```
-
-```
-
-```
