@@ -26,3 +26,4 @@ go.work
 .config
 .credentials
 golangci-lint
+docs/slide/
