@@ -7,6 +7,12 @@ marp: true
 theme: meta
 ---
 
+<script type="module">
+  import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@latest/dist/mermaid.esm.min.mjs';
+  mermaid.initialize({ startOnLoad: true });
+  window.addEventListener('vscode.markdown.updateContent', function() { mermaid.init() });
+</script>
+
 # 実装しながら学ぶ！HTTP サーバー実装の基本
 
 Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
@@ -31,7 +37,7 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 
 - 小林拓磨
   - X: [@takuma5884rbb](https://x.com/takuma5884rbb)
-- 2000 年生まれ
+- 2000 年生まれの 23 卒
 - Software Engineer at [Finatext](https://finatext.com/)
   - １年目からシステムの詳細設計・実装・運用を経験
   - 主な技術スタック
@@ -39,7 +45,13 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 - [2024 Japan AWS Jr.Champions](https://aws.amazon.com/jp/blogs/psa/2024-japan-aws-jr-champions-report/)
 - 趣味は料理・マラソン
 
-![bg right:45%](./TAKUMA.jpeg)
+## ![bg right:40%](./TAKUMA.jpeg)
+
+---
+
+## アイスブレイク
+
+皆さんがプログラミングするときに意識していることは何ですか？
 
 ---
 
@@ -47,9 +59,8 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 
 - HTTP サーバーの実装を通して、実践的な開発手法について学ぶ
   - "ただ動くだけのシステム"を脱却する
-- 使用する技術スタック
-  - Go 言語（シンプルで読みやすい構文が特徴）
-  - 標準ライブラリのみを使用（フレームワークに依存しない基本を学ぶ）
+- 単なる技術解説ではなく、**なぜ**その技術が必要なのかを理解する
+- 実装を通して、実際の開発現場でも役立つ知識とスキルを身につける
 
 ---
 
@@ -67,109 +78,97 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 
 ---
 
-## 目次：リクエストを受け取る
-
-- HTTP リクエストの基本構造
-  - メソッド（GET, POST, PUT, DELETE）
-  - パス（URL）
-  - ヘッダー（メタデータ）
-  - ボディ（データ）
-- サーバーの初期化と設定
-  - ポートの設定
-  - ルーティング（どのパスでどの処理を行うか）
-- ミドルウェアの活用
-  - リクエストの前処理・後処理
-  - ログ記録、認証チェックなど
-
-```go
-// cmd/main.go から抜粋
-mux := http.NewServeMux()  // ルーティングを管理するマルチプレクサを作成
-userHandler.RegisterRoutes(mux)  // ルートを登録
-handler := logMiddleware(mux)  // ログ記録用のミドルウェアを適用
-```
+## HTTP サーバーの処理を分割してみよう
 
 ---
 
-## 目次：異常系を考える
-
-- エラーハンドリングの重要性
-  - ユーザーに適切なエラーメッセージを返す
-  - システム内部のエラーは隠す
-- 想定されるエラーパターン
-  - 不正な入力データ
-  - リソースが見つからない
-  - 認証・認可エラー
-  - サーバー内部エラー
-- エラーの種類に応じた HTTP ステータスコード
-  - 400: Bad Request（クライアントのリクエストに問題）
-  - 401: Unauthorized（認証が必要）
-  - 404: Not Found（リソースが存在しない）
-  - 500: Internal Server Error（サーバー内部のエラー）
+Hello, World! を返す HTTP サーバーの実装例
 
 ```go
-// internal/interface/handler/user_handler.go から抜粋
-if err != nil {
-    if err == usecase.ErrInvalidCredentials {
-        http.Error(w, "Invalid username or password", http.StatusUnauthorized)
-    } else {
-        http.Error(w, err.Error(), http.StatusInternalServerError)
-    }
-    return
+func main() {
+  mux := http.NewServeMux()
+
+  mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+    w.Write([]byte("Hello, World!"))
+  })
+
+  log.Fatal(http.ListenAndServe(":8080", mux))
 }
 ```
 
----
-
-## 目次：認証
-
-- 認証とは何か
-  - ユーザーが本人であることを確認するプロセス
-  - システムのセキュリティの基盤
-- JWT（JSON Web Token）の仕組み
-  - ヘッダー、ペイロード、署名の 3 つの部分からなる
-  - 改ざん検知が可能
-  - ステートレス（サーバーにセッション情報を保存しない）
-- 認証フロー
-  - ユーザー登録
-  - ログイン（認証情報の検証とトークン発行）
-  - 保護されたリソースへのアクセス（トークン検証）
-
-```go
-// internal/util/jwt.go から抜粋
-// Generate creates a new JWT token for a user
-func (m *JWTManager) Generate(userID, username string) (string, error) {
-    now := time.Now()
-    claims := JWTClaims{
-        UserID:    userID,
-        Username:  username,
-        ExpiresAt: now.Add(m.expiry).Unix(),
-        IssuedAt:  now.Unix(),
-    }
-    // ... トークン生成処理 ...
-}
+```bash
+$ curl http://localhost:8080/
+Hello, World!%
 ```
 
 ---
 
-## 今日学んで欲しいこと
+クエリパラメータで名前を受け取り、その名前に対応するメールアドレスを返す HTTP サーバーの実装例
+
+```go
+mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  email := getEmailByNameFromDB(name)
+
+  w.Write([]byte(email))
+})
+```
+
+```bash
+$ curl "http://localhost:8080/profile?name=hoge"
+hoge@example.com%
+```
 
 ---
 
-## 今日学んで欲しいこと
+HTTP サーバーは何をするシステム？🤔
 
-1. **関数の責務を捉える**
+---
 
-   - 関心事の分離による保守性の向上
-   - 責任範囲の明確化
+### 抽象化された Web サーバーの処理
 
-2. **適切なリクエスト処理とバリデーション**
+<pre class="mermaid">
+sequenceDiagram
+    participant Client as クライアント
+    participant WebServer as サーバー
+    participant Database as データベース
 
-   - 不正なリクエストからサーバーを守る
-   - エラーハンドリングの重要性
+    Client->>+WebServer: リクエスト
+    WebServer->>WebServer: リクエストからモデルを生成
+    WebServer->>+Database: クエリ発行
+    Database-->>-WebServer: データ返却
+    WebServer->>WebServer: データからモデルを生成
+    WebServer-->>-Client: レスポンス
+</pre>
 
-3. **認証の基本と実装方法**
-   - セキュアな認証の実現
-   - トークンベース認証のメリット・デメリット
+---
+
+### Web サーバーの動作はいくつかの処理に分けられる
+
+1. リクエストを受け取る
+2. サーバーのデータモデルに読み替える
+3. 出来たモデルに対してクエリを組み立て、発行する
+4. クエリの結果を受け取り、モデルに変換する
+5. モデルからレスポンスを生成する
+
+---
+
+### 分けられた処理をグルーピングしてみる
+
+1. リクエストを受け取る <span style="color: #ff0000">①</span>
+2. サーバーのデータモデルに読み替える <span style="color:rgb(255, 140, 60)">②</span>
+3. 出来たモデルに対してクエリを組み立て、発行する <span style="color:rgb(50, 0, 255)">③</span>
+4. クエリの結果を受け取り、モデルに変換する <span style="color: rgb(255, 140, 60)">②</span>
+5. モデルからレスポンスを生成する <span style="color: #ff0000">①</span>
+
+<span style="color: #ff0000">クライアントとの IF 処理</span>
+<span style="color:rgb(255, 140, 60)">クライアントとの IF とアプリケーション内データモデルの変換</span>
+<span style="color:rgb(50, 0, 255)">アプリケーション内データモデルと DB とのやりとり</span>
+
+---
+
+ということで、それぞれの責務を考えてみましょう
 
 ---
 
@@ -183,40 +182,92 @@ func (m *JWTManager) Generate(userID, username string) (string, error) {
 
 ---
 
-**クリーンアーキテクチャとは誰々が提唱した概念で〜**
-
 ![bg 70% blur:3px opacity:.4](./CleanArchitecture.jpg)
 
+**クリーンアーキテクチャとは誰々が提唱した概念で〜**
 **...という話は今日はしません！**
 
-> > > 画像： https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html
+> > > 画像： <https://blog.cleancoder.com/uncle-bob/2012/08/13/the-clean-architecture.html>
 
 ---
 
-## 関数の責務を捉える（1/5）
+## なぜ関数の責務に着目するのか？
 
-### 関数の責務とは？
+- その関数の関心ごとを明確にする
+  - 設計を変える場合、依存する部分が最小限になる
+  - 同じユースケースにおいて再利用できる
+  - テストも簡単
 
-- **責務**：その関数が果たすべき役割や責任
-- **単一責任の原則**：一つの関数は一つのことだけを行うべき
+---
 
-### なぜ重要か？
-
-- コードの**可読性**が向上する
-- **テスト**がしやすくなる
-- **再利用**しやすくなる
-- **バグ**が少なくなる
+### 関数の関心ごとを明確にする
 
 ```go
-// 良い例：関数名が責務を明確に表している
-func (r *InMemoryUserRepository) FindByUsername(username string) (*domain.User, error) {
-    // ユーザー名からユーザーを検索する処理のみを行う
+// DBに対してクエリを発行し、プロフィールを取得する
+func (r *userRepository) GetProfile(name string) (*Profile, error) {
+  return r.db.Query("SELECT * FROM profiles WHERE name = ?", name)
+}
+```
+
+```go
+// リクエストからユーザ名を取得し、対応するプロフィールを返す
+func (h *handler)GetProfileHandler(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  profile, err := h.UserRepository.GetProfile(name)
+  if err != nil {
+    http.Error(w, "Profile not found", http.StatusNotFound)
+    return
+  }
+
+  w.Write([]byte(profile))
 }
 ```
 
 ---
 
-## 関数の責務を捉える（2/5）
+## 設計を変える場合、依存する部分が最小限になる
+
+### 処理が関数に分かれていない場合
+
+```go
+mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  profile := db.Query("SELECT * FROM profiles WHERE name = ?", name)
+
+  w.Write([]byte(profile))
+})
+```
+
+```go
+mux.HandleFunc("/article", func(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  profile := db.Query("SELECT * FROM profiles WHERE name = ?", name) // 実装が重複している
+  article := db.Query("SELECT * FROM articles WHERE author = ?", name)
+
+  w.Write([]byte(profile + article))
+})
+```
+
+---
+
+ユーザー名からプロフィールを取得する処理が重複している
+ではプロフィールの項目が増えた場合はどうなるでしょう？
+テーブルの構造が変わった場合は？
+etc.
+
+---
+
+[関数の関心ごとを明確にする](#関数の関心ごとを明確にする)で紹介したサンプルコードにおいては、
+
+- API のリクエストパラメータはレスポンス形式を変更したい場合は`GetProfileHandler` を
+- DB のクエリを変更したい場合は `GetProfile` を
+
+変更すれば良い！
+
+---
 
 ### レイヤー分けによる責務の分離
 
@@ -224,26 +275,20 @@ func (r *InMemoryUserRepository) FindByUsername(username string) (*domain.User, 
 
 1. **ドメイン層**（`internal/domain`）
 
-   - ビジネスエンティティとルールを定義
+   - データモデルの構造や、その振る舞いを定義
    - 例：`User`構造体
 
 2. **ユースケース層**（`internal/usecase`）
 
-   - ビジネスロジックを実装
+   - データモデルを操作したり、外部とのやり取りを行うロジックを定義
    - 例：`Register`、`Login`関数
 
 3. **インターフェース層**（`internal/interface`）
 
-   - 外部とのやり取りを担当
+   - 外部(クライアント、DB)とのやり取りを担当
    - 例：`UserHandler`（HTTP）、`InMemoryUserRepository`（データ保存）
 
-4. **インフラ層**（`cmd`）
-   - アプリケーションの起動と設定
-   - 例：`main`関数
-
 ---
-
-## 関数の責務を捉える（3/5）
 
 ### 実例：ユーザー登録の処理
 
@@ -267,8 +312,6 @@ func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 ```
 
 ---
-
-## 関数の責務を捉える（4/5）
 
 ### 実例：ユーザー登録の処理（続き）
 
@@ -302,8 +345,6 @@ func (uc *UserUseCase) Register(req RegisterRequest) (*RegisterResponse, error) 
 
 ---
 
-## 関数の責務を捉える（5/5）
-
 ### 実例：ユーザー登録の処理（続き）
 
 3. **リポジトリ**（データアクセス）
@@ -326,10 +367,48 @@ func (r *InMemoryUserRepository) Store(user *domain.User) error {
 }
 ```
 
-### ポイント
+---
 
-- 各関数は明確な責務を持ち、他の層の詳細を知らない
-- これにより、コードの変更が他の部分に影響しにくくなる
+### 同じユースケースにおいて再利用できる
+
+- アプリケーションの中で、特定の処理を代表させる
+  - その関数に必要なルールを集約できる
+  - 例：
+    - ユーザー登録の処理を`Register`関数に集約
+    - ユーザー名は 3 文字以上、メールアドレスは正しい形式であることを確認
+    - ユーザー登録に必ずこの関数を使うようにすれば、上記のチェックを漏らすことがなくなる
+
+---
+
+### テストが簡単
+
+例えば先述のコード
+
+```go
+mux.HandleFunc("/article", func(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  profile := db.Query("SELECT * FROM profiles WHERE name = ?", name) // 実装が重複している
+  article := db.Query("SELECT * FROM articles WHERE author = ?", name)
+
+  w.Write([]byte(profile + article))
+})
+```
+
+ここで、
+
+- article テーブルの author カラムをを削除し、代わりに profile テーブルの profile_id カラムを参照するように変更したい場合
+- profile 取得のクエリが他の API でも使われている場合
+
+を考えます
+
+---
+
+- article テーブルの author カラムをを削除し、代わりに profile テーブルの profile_id カラムを参照するように変更したい場合
+- profile 取得のクエリが他の API でも使われている場合
+
+テーブル構造を変更した影響が、上記クエリを利用しているすべての API のテストコードに波及してしまう
+→ 直すのが大変 🫠
 
 ---
 
@@ -346,6 +425,18 @@ func (r *InMemoryUserRepository) Store(user *domain.User) error {
 それは「**書いた通りにしか動かない**」です。
 
 正常に処理できないリクエストを受け取った際に、想定していない動作をしたり、その結果データが壊れたり、不正なリクエストを外部に送ったりしてしまう可能背があります。
+
+---
+
+## ハンドリングが必要なデータの例
+
+- 携帯電話番号
+  - 日本国内に限って言えば、
+    - 10 桁の数字
+    - 最初の 3 桁は、060, 070, 080, 090 のいずれか
+- マイナンバー
+  - 12 桁の数字
+  - チェックディジットの計算が必要
 
 ---
 
@@ -443,6 +534,13 @@ func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
   }
   ```
 
+### バリデーションの階層化が重要な理由
+
+- **防衛的プログラミング**：複数の層でチェックすることで安全性が向上
+- **責務の明確化**：各層は自分の責任範囲内でのみ検証を行う
+- **エラーの適切な処理**：発生場所に応じた適切なエラーハンドリングが可能
+- **セキュリティの多層化**：一つの層のバグや見落としがあっても他の層でカバー
+
 ---
 
 ## 適切なリクエスト処理とバリデーション（4/5）
@@ -503,6 +601,18 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
   // パスワードのハッシュ化
   hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
   ```
+
+### セキュリティ対策が不十分だと何が起きるか？
+
+- **データ漏洩**：顧客情報や機密情報の流出
+- **サービス停止**：DoS 攻撃によるシステムダウン
+- **データ改ざん**：不正なデータ操作
+- **権限昇格**：一般ユーザーが管理者権限を取得
+- **風評被害**：セキュリティインシデントによる信頼喪失
+
+---
+
+## 認証
 
 ---
 
@@ -683,9 +793,36 @@ func (m *JWTManager) Verify(token string) (*JWTClaims, error) {
 
 ## まとめ
 
+### 今日学んだこと
+
+1. **関数の責務を捉える**
+
+   - 単一責任の原則に基づいたコード設計
+   - レイヤー分けによる関心事の分離
+
+2. **適切なリクエスト処理とバリデーション**
+
+   - 多層的なバリデーションの重要性
+   - セキュリティを考慮したエラーハンドリング
+
+3. **認証の基本と実装方法**
+   - JWT を使ったステートレス認証
+   - セキュアな認証フローの実装
+
+### 次のステップ
+
+- **学んだ概念を自分のプロジェクトに適用してみる**
+- **他の認証方式（OAuth、多要素認証など）について学ぶ**
+- **より複雑なユースケースでの実装を試みる**
+- **テストの書き方を学び、堅牢なコードを目指す**
+
 ---
 
 ## 宣伝
+
+---
+
+![bg 80%](./summer_internship_summer_internship_engineer.png)
 
 ---
 
@@ -700,6 +837,11 @@ func (m *JWTManager) Verify(token string) (*JWTClaims, error) {
 ## ご清聴ありがとうございました！
 
 質問やフィードバックがあればお気軽にどうぞ！
+例）
+
+- 「自分なりにコード書いてみたのでレビューしてください！」
+- 「この部分の実装が難しいのでアドバイスください！」
+
 X の DM でも受け付けています！→
 ![bg right:35% width:450px](./x.png)
 
