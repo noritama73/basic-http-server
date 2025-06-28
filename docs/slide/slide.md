@@ -122,11 +122,9 @@ $ curl "http://localhost:8080/profile?name=hoge"
 hoge@example.com%
 ```
 
-この例では、クエリパラメータから名前を取得し、それに対応するメールアドレスをデータベースから取得して返しています。しかし、この実装には様々な問題があります。例えば、入力値の検証がない、エラー処理がない、責務の分離がないなどです。
-
 ---
 
-HTTP サーバーは何をするシステム？🤔
+### HTTP サーバーは何をするシステム？🤔
 
 上記の例を見ると、HTTP サーバーは単にリクエストを受け取り、レスポンスを返すだけのシステムのように見えます。しかし、実際にはもっと複雑な処理が必要です。HTTP サーバーの役割を抽象化して考えてみましょう。
 
@@ -158,8 +156,6 @@ sequenceDiagram
 4. クエリの結果を受け取り、モデルに変換する
 5. モデルからレスポンスを生成する
 
-これらの処理を適切に分割することで、コードの可読性、保守性、テスト容易性が向上します。
-
 ---
 
 ### 分けられた処理をグルーピングしてみる
@@ -174,8 +170,6 @@ sequenceDiagram
 <span style="color:rgb(255, 140, 60)">クライアントとの IF とアプリケーション内データモデルの変換</span>
 <span style="color:rgb(50, 0, 255)">アプリケーション内データモデルと DB とのやりとり</span>
 
-このように処理をグループ化すると、それぞれの責務が明確になります。これらのグループは、後ほど説明するレイヤー構造の基礎となります。
-
 ---
 
 ということで、それぞれの責務を考えてみましょう
@@ -186,15 +180,13 @@ sequenceDiagram
 
 ## 関数の責務を捉える
 
-関数の責務とは、その関数が担うべき役割や責任のことです。一つの関数は一つの責任を持つべきという「単一責任の原則」は、ソフトウェア設計の基本原則の一つです。
+関数の責務とは、その関数が担うべき役割や責任のことです。一つの関数は一つの責任を持つべきという「単一責任の原則(SOLID 原則)」は、ソフトウェア設計の基本原則の一つです。
 
 ---
 
 責務...
 
 アーキテクチャの話...？🤔
-
-「責務」という言葉を聞くと、アーキテクチャの話と思われるかもしれません。確かに、アーキテクチャ設計では責務の分離は重要な概念ですが、今日はより実践的な観点から、コードレベルでの責務の分離について考えていきます。
 
 ---
 
@@ -244,11 +236,11 @@ func (h *handler)GetProfileHandler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-この例では、データベースアクセスと HTTP リクエスト処理の責務が明確に分離されています。`GetProfile`関数はデータベースからプロフィールを取得する責務を持ち、`GetProfileHandler`関数は HTTP リクエストを処理する責務を持っています。
-
 ---
 
 ## 設計を変える場合、依存する部分が最小限になる
+
+---
 
 ### 処理が関数に分かれていない場合
 
@@ -278,11 +270,11 @@ mux.HandleFunc("/article", func(w http.ResponseWriter, r *http.Request) {
 ---
 
 ユーザー名からプロフィールを取得する処理が重複している
-ではプロフィールの項目が増えた場合はどうなるでしょう？
+ではプロフィールの項目が増えた場合はどうなる？
 テーブルの構造が変わった場合は？
 etc.
 
-例えば、プロフィールテーブルに新しいカラムが追加された場合や、テーブル構造が変更された場合、重複している全ての箇所を修正する必要があります。これは保守性を低下させ、バグの原因となります。
+これらの場合、重複している全ての箇所を修正する必要があります。これは保守性を低下させ、バグの原因となります。
 
 ---
 
@@ -314,13 +306,11 @@ etc.
 3. **インターフェース層**（`internal/interface`）
 
    - 外部(クライアント、DB)とのやり取りを担当
-   - 例：`UserHandler`（HTTP）、`InMemoryUserRepository`（データ保存）
+   - 例：`UserHandler`（HTTP）、`InMemoryUserRepository`（DB 操作）
 
 このレイヤー構造は、先ほど見たグループ化された処理と対応しています。各レイヤーが明確な責務を持つことで、コードの構造が整理され、保守性が向上します。
 
 ---
-
-### 実例：ユーザー登録の処理
 
 1. **ハンドラー**（HTTP 処理）
 
@@ -329,15 +319,14 @@ etc.
 func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
     // HTTPリクエストの解析とレスポンス返却のみを担当
     body, err := io.ReadAll(r.Body)
-    // ...
+
     var req usecase.RegisterRequest
     if err := json.Unmarshal(body, &req); err != nil {
         http.Error(w, "Invalid request format", http.StatusBadRequest)
         return
     }
-    // ビジネスロジックはユースケースに委譲
+
     resp, err := h.userUseCase.Register(req)
-    // ...
 }
 ```
 
@@ -345,33 +334,25 @@ func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-### 実例：ユーザー登録の処理（続き）
-
 2. **ユースケース**（ビジネスロジック）
 
 ```go
 // internal/usecase/user_usecase.go
 func (uc *UserUseCase) Register(req RegisterRequest) (*RegisterResponse, error) {
-    // 入力検証
     if req.Username == "" || req.Password == "" || req.Email == "" {
         return nil, ErrInvalidInput
     }
 
-    // ビジネスルール適用（ユーザー名の重複チェックなど）
     _, err := uc.userRepo.FindByUsername(req.Username)
     if err == nil {
         return nil, errors.New("username already taken")
     }
 
-    // パスワードハッシュ化などのビジネスロジック
     hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-    // ...
 
-    // データ保存はリポジトリに委譲
     if err := uc.userRepo.Store(user); err != nil {
         return nil, err
     }
-    // ...
 }
 ```
 
@@ -379,23 +360,18 @@ func (uc *UserUseCase) Register(req RegisterRequest) (*RegisterResponse, error) 
 
 ---
 
-### 実例：ユーザー登録の処理（続き）
-
 3. **リポジトリ**（データアクセス）
 
 ```go
 // internal/interface/repository/user_repository.go
 func (r *InMemoryUserRepository) Store(user *domain.User) error {
-    // データ保存のみを担当
     r.mutex.Lock()
     defer r.mutex.Unlock()
 
-    // 重複チェック
     if _, exists := r.users[user.ID]; exists {
         return ErrUserExists
     }
 
-    // データ保存
     r.users[user.ID] = user
     return nil
 }
@@ -414,7 +390,7 @@ func (r *InMemoryUserRepository) Store(user *domain.User) error {
     - ユーザー名は 3 文字以上、メールアドレスは正しい形式であることを確認
     - ユーザー登録に必ずこの関数を使うようにすれば、上記のチェックを漏らすことがなくなる
 
-ビジネスロジックをユースケース層に集約することで、同じロジックを複数の場所で再利用できます。例えば、Web アプリケーションと CLI ツールの両方でユーザー登録機能を提供する場合、同じユースケース関数を使用できます。
+ビジネスロジックをユースケース層に集約することで、同じロジックを複数の場所で再利用できます。例えば、Web API と バッチ処理の両方でユーザー登録機能を提供する場合、同じユースケース関数を使用できます。
 
 ---
 
@@ -488,41 +464,6 @@ HTTP サーバーを実装する上で、リクエスト処理とバリデーシ
 
 ---
 
-## 適切なリクエスト処理とバリデーション（1/5）
-
-### リクエスト処理の基本
-
-- HTTP リクエストの構成要素
-  - **メソッド**：GET, POST, PUT, DELETE など
-  - **パス**：リソースの場所（例：`/users/123`）
-  - **ヘッダー**：メタデータ（例：`Content-Type`, `Authorization`）
-  - **ボディ**：送信データ（JSON, フォームデータなど）
-
-```go
-// internal/interface/handler/user_handler.go
-func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
-    // メソッドチェック
-    if r.Method != http.MethodPost {
-        http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-        return
-    }
-
-    // ボディ読み取り
-    body, err := io.ReadAll(r.Body)
-    if err != nil {
-        http.Error(w, "Failed to read request body", http.StatusBadRequest)
-        return
-    }
-    defer r.Body.Close()
-
-    // ...
-}
-```
-
----
-
-## 適切なリクエスト処理とバリデーション（2/5）
-
 ### バリデーションの重要性
 
 - **バリデーション**：入力データが期待通りかを確認すること
@@ -531,56 +472,62 @@ func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
   - **データ整合性**：不正なデータがシステムに入らないようにする
   - **ユーザー体験**：早期にエラーを検出し、適切なフィードバックを提供
 
+---
+
 ### バリデーションのレベル
 
 1. **構文的バリデーション**：データ形式が正しいか
 
-   ```go
-   if err := json.Unmarshal(body, &req); err != nil {
-       http.Error(w, "Invalid request format", http.StatusBadRequest)
-       return
-   }
-   ```
+```go
+if err := json.Unmarshal(body, &req); err != nil {
+    http.Error(w, "Invalid request format", http.StatusBadRequest)
+    return
+}
+```
 
 2. **意味的バリデーション**：ビジネスルールに沿っているか
-   ```go
-   if req.Username == "" || req.Password == "" || req.Email == "" {
-       return nil, ErrInvalidInput
-   }
-   ```
+
+```go
+if req.Username == "" || req.Password == "" || req.Email == "" {
+    return nil, ErrInvalidInput
+}
+```
 
 ---
-
-## 適切なリクエスト処理とバリデーション（3/5）
 
 ### バリデーションの場所
 
 - **ハンドラー層**：HTTP リクエストの形式チェック
 
-  ```go
-  // internal/interface/handler/user_handler.go
-  if r.Method != http.MethodPost {
-      http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-      return
-  }
-  ```
+```go
+// internal/interface/handler/user_handler.go
+if r.Method != http.MethodPost {
+    http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+    return
+}
+```
 
 - **ユースケース層**：ビジネスルールに基づくチェック
 
-  ```go
-  // internal/usecase/user_usecase.go
-  if req.Username == "" || req.Password == "" || req.Email == "" {
-      return nil, ErrInvalidInput
-  }
-  ```
+```go
+// internal/usecase/user_usecase.go
+if req.Username == "" || req.Password == "" || req.Email == "" {
+    return nil, ErrInvalidInput
+}
+```
+
+---
 
 - **リポジトリ層**：データ整合性のチェック
-  ```go
-  // internal/interface/repository/user_repository.go
-  if _, exists := r.users[user.ID]; exists {
-      return ErrUserExists
-  }
-  ```
+
+```go
+// internal/interface/repository/user_repository.go
+if _, exists := r.users[user.ID]; exists {
+    return ErrUserExists
+}
+```
+
+---
 
 ### バリデーションの階層化が重要な理由
 
@@ -591,8 +538,6 @@ func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## 適切なリクエスト処理とバリデーション（4/5）
-
 ### エラーハンドリング
 
 - エラーの種類に応じた適切な HTTP ステータスコードを返す
@@ -601,6 +546,8 @@ func (h *UserHandler) RegisterHandler(w http.ResponseWriter, r *http.Request) {
   - **403 Forbidden**：権限がない
   - **404 Not Found**：リソースが存在しない
   - **500 Internal Server Error**：サーバー内部のエラー
+
+---
 
 ```go
 // internal/interface/handler/user_handler.go
@@ -625,12 +572,9 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## 適切なリクエスト処理とバリデーション（5/5）
-
 ### セキュリティに関する注意点
 
 - **入力は常に疑う**：すべてのユーザー入力は潜在的に危険
-- **最小権限の原則**：必要最小限の権限だけを与える
 - **内部エラーの詳細は隠す**：攻撃者に情報を与えない
 
   ```go
@@ -652,6 +596,8 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
   hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
   ```
 
+---
+
 ### セキュリティ対策が不十分だと何が起きるか？
 
 - **データ漏洩**：顧客情報や機密情報の流出
@@ -668,8 +614,6 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 ---
 
-## 認証の基本と実装方法（1/5）
-
 ### 認証とは
 
 - **認証（Authentication）**：ユーザーが本人であることを確認するプロセス
@@ -680,8 +624,6 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
   - 「あなたは何ができますか？」という質問に答える
 
 ---
-
-## 認証の基本と実装方法（2/5）
 
 ### JWT（JSON Web Token）とは
 
@@ -704,17 +646,44 @@ type JWTClaims struct {
 
 ---
 
-### JWT のメリット
+### JWT の仕組み（コンピュータサイエンスの観点から）
 
-- **ステートレス**：サーバーにセッション情報を保存する必要がない
-- **スケーラビリティ**：複数のサーバー間で認証情報を共有しやすい
-- **クロスドメイン**：異なるドメイン間でも使用可能
+JWT は暗号学的に安全なトークンを生成するための仕組みです。その処理は以下のように行われます：
 
-JWT は、特にマイクロサービスアーキテクチャや分散システムにおいて、認証情報を効率的に管理するために広く使用されています。サーバー側でセッション状態を保持する必要がないため、スケーラビリティが向上します。
+1. **Base64URL エンコーディング**：ヘッダーとペイロードを JSON 形式で作成し、それぞれを Base64URL でエンコードします
+2. **HMAC または RSA/ECDSA による署名**：エンコードされたヘッダーとペイロードを連結し、秘密鍵を使って署名を生成します
+3. **トークンの組み立て**：`ヘッダー.ペイロード.署名` の形式で 3 つの部分を連結します
+
+検証時には、受け取ったトークンを分解し、ヘッダーとペイロードから同じ方法で署名を再計算して、トークンに含まれる署名と一致するか確認します。これにより、トークンが改ざんされていないことを確認できます。
 
 ---
 
-## 認証の基本と実装方法（3/5）
+### 認証方式の比較
+
+| 認証方式       | メリット                                                           | デメリット                                                 | 適した用途                                                       |
+| -------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| **セッション** | ・サーバー側で完全に制御可能<br>・トークンの即時無効化が容易       | ・サーバーにセッション状態を保存<br>・スケーリングが難しい | ・単一サーバーのアプリケーション<br>・高セキュリティが必要な場合 |
+| **JWT**        | ・ステートレス<br>・スケーラビリティが高い<br>・クロスドメイン対応 | ・トークンの即時無効化が難しい<br>・ペイロードサイズの制限 | ・マイクロサービス<br>・分散システム<br>・SPA と API の連携      |
+| **OAuth**      | ・サードパーティ認証が可能<br>・権限の細かい制御                   | ・実装が複雑<br>・フロー管理が必要                         | ・サードパーティ連携<br>・API プラットフォーム                   |
+
+---
+
+### JWT を使うべき場合
+
+- **マイクロサービスアーキテクチャ**：複数のサービス間で認証情報を共有する必要がある場合
+- **ステートレスな API サーバー**：サーバーがセッション状態を保持せず、水平スケーリングが必要な場合
+- **SPA（Single Page Application）**：フロントエンドとバックエンドが分離されている場合
+- **モバイルアプリケーション**：異なるプラットフォーム間で一貫した認証が必要な場合
+
+---
+
+### JWT を避けるべき場合
+
+- **セッション無効化が頻繁に必要**：ユーザーのログアウトや権限変更が頻繁に発生する場合
+- **機密性の高いデータを扱う**：トークン自体に機密データを含める必要がある場合
+- **単一サーバーの小規模アプリケーション**：セッションベースの認証で十分な場合
+
+---
 
 ### JWT の生成
 
@@ -752,8 +721,6 @@ func (m *JWTManager) Generate(userID, username string) (string, error) {
 
 ---
 
-## 認証の基本と実装方法（4/5）
-
 ### JWT の検証
 
 ```go
@@ -789,8 +756,6 @@ func (m *JWTManager) Verify(token string) (*JWTClaims, error) {
 ```
 
 ---
-
-## 認証の基本と実装方法（5/5）
 
 ### 認証フロー
 
