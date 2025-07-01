@@ -97,15 +97,6 @@ func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Extract user ID from URL path
-	// Expected format: /users/{id}
-	pathParts := strings.Split(r.URL.Path, "/")
-	if len(pathParts) < 3 {
-		http.Error(w, "Invalid URL path", http.StatusBadRequest)
-		return
-	}
-	userID := pathParts[2]
-
 	// Authenticate user with JWT
 	authHeader := r.Header.Get("Authorization")
 	if authHeader == "" {
@@ -129,14 +120,8 @@ func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Only allow users to access their own information
-	if claims.UserID != userID {
-		http.Error(w, "Unauthorized access", http.StatusForbidden)
-		return
-	}
-
 	// Get user information
-	resp, err := h.userUseCase.GetUser(usecase.GetUserRequest{ID: userID})
+	resp, err := h.userUseCase.GetUser(usecase.GetUserRequest{ID: claims.UserID})
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return

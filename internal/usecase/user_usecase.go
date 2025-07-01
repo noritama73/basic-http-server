@@ -53,6 +53,10 @@ func (uc *UserUseCase) Register(req RegisterRequest) (*RegisterResponse, error) 
 		return nil, ErrInvalidInput
 	}
 
+	if len(req.Password) < 8 {
+		return nil, errors.New("password must be at least 8 characters long")
+	}
+
 	// Check if username already exists
 	_, err := uc.userRepo.FindByUsername(req.Username)
 	if err == nil {

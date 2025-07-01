@@ -87,13 +87,19 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 Hello, World! を返す HTTP サーバーの実装例
 
 ```go
+package main
+
+import (
+  "fmt"
+  "log"
+  "net/http"
+)
+
 func main() {
   mux := http.NewServeMux()
-
   mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
     w.Write([]byte("Hello, World!"))
   })
-
   log.Fatal(http.ListenAndServe(":8080", mux))
 }
 ```
@@ -111,7 +117,7 @@ Hello, World!%
 mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
   name := r.URL.Query().Get("name")
 
-  email := getEmailByNameFromDB(name)
+  email := fmt.Sprintf("%s@example.com", name) // 実際はデータベースなどから取得する
 
   w.Write([]byte(email))
 })
@@ -124,7 +130,7 @@ hoge@example.com%
 
 ---
 
-### HTTP サーバーは何をするシステム？🤔
+### 結局、HTTP サーバーとは何をするシステム？🤔
 
 上記の例を見ると、HTTP サーバーは単にリクエストを受け取り、レスポンスを返すだけのシステムのように見えます。しかし、実際にはもっと複雑な処理が必要です。HTTP サーバーの役割を抽象化して考えてみましょう。
 
@@ -132,8 +138,13 @@ hoge@example.com%
 
 ### 抽象化された Web サーバーの処理
 
+<div class="columns">
+
+<div>
+
 <pre class="mermaid">
 sequenceDiagram
+    autonumber
     participant Client as クライアント
     participant WebServer as サーバー
     participant Database as データベース
@@ -146,15 +157,19 @@ sequenceDiagram
     WebServer-->>-Client: レスポンス
 </pre>
 
----
+</div>
 
-### Web サーバーの動作はいくつかの処理に分けられる
+<div>
 
 1. リクエストを受け取る
 2. サーバーのデータモデルに読み替える
 3. 出来たモデルに対してクエリを組み立て、発行する
 4. クエリの結果を受け取り、モデルに変換する
 5. モデルからレスポンスを生成する
+
+</div>
+
+</div>
 
 ---
 
@@ -165,6 +180,8 @@ sequenceDiagram
 3. 出来たモデルに対してクエリを組み立て、発行する <span style="color:rgb(50, 0, 255)">③</span>
 4. クエリの結果を受け取り、モデルに変換する <span style="color: rgb(255, 140, 60)">②</span>
 5. モデルからレスポンスを生成する <span style="color: #ff0000">①</span>
+
+#### グループ
 
 <span style="color: #ff0000">クライアントとの IF 処理</span>
 <span style="color:rgb(255, 140, 60)">クライアントとの IF とアプリケーション内データモデルの変換</span>
@@ -436,9 +453,7 @@ HTTP サーバーを実装する上で、リクエスト処理とバリデーシ
 
 ### ちょっと脱線
 
-プログラムの特性を一言で表すと何だと思いますか？
-
-プログラムは私たちが書いた通りに動作します。しかし、それは私たちが想定していない入力に対しても同様です。そのため、入力値の検証は非常に重要です。
+プログラムの特性を一言で表すと何だと思いますか？🤔
 
 ---
 
@@ -474,78 +489,59 @@ HTTP サーバーを実装する上で、リクエスト処理とバリデーシ
 
 ---
 
-### バリデーションのレベル
+例えば、
 
-1. **構文的バリデーション**：データ形式が正しいか
+- ユーザーが入力した電話番号を保存 → いざ SMS を送信しようとしたら、番号が不正で送れなかった 🫠 というケース
+- 入力された電話番号から人物を検索するシステム(があるとして)に接続したとき、その電話番号が不正だったためにシステムからはエラーが返ってきたが、その想定をしていなかったため想定外エラーの出方をしてしまい焦る
+
+こういうチェックをしておけば安心！
+
+```go
+switch input.PhoneNumber[0:3] {
+case "060", "070", "080", "090":
+  // 正常な電話番号
+default:
+  // 呼び出し元でこのエラーをハンドリングしておいて、400系のエラーにする
+  return nil, errors.New("invalid phone number")
+}
+```
+
+---
+
+### バリデーションの例
+
+1. データ形式が正しいか
 
 ```go
 if err := json.Unmarshal(body, &req); err != nil {
-    http.Error(w, "Invalid request format", http.StatusBadRequest)
-    return
+  http.Error(w, "Invalid request format", http.StatusBadRequest)
+  return
 }
 ```
 
-2. **意味的バリデーション**：ビジネスルールに沿っているか
+2. ビジネスルールに沿っているか
 
 ```go
-if req.Username == "" || req.Password == "" || req.Email == "" {
-    return nil, ErrInvalidInput
+if len(req.Password) < 8 {
+  return nil, errors.New("password must be at least 8 characters long")
 }
 ```
 
----
-
-### バリデーションの場所
-
-- **ハンドラー層**：HTTP リクエストの形式チェック
-
-```go
-// internal/interface/handler/user_handler.go
-if r.Method != http.MethodPost {
-    http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-    return
-}
-```
-
-- **ユースケース層**：ビジネスルールに基づくチェック
-
-```go
-// internal/usecase/user_usecase.go
-if req.Username == "" || req.Password == "" || req.Email == "" {
-    return nil, ErrInvalidInput
-}
-```
-
----
-
-- **リポジトリ層**：データ整合性のチェック
-
-```go
-// internal/interface/repository/user_repository.go
-if _, exists := r.users[user.ID]; exists {
-    return ErrUserExists
-}
-```
-
----
-
-### バリデーションの階層化が重要な理由
-
-- **防衛的プログラミング**：複数の層でチェックすることで安全性が向上
-- **責務の明確化**：各層は自分の責任範囲内でのみ検証を行う
-- **エラーの適切な処理**：発生場所に応じた適切なエラーハンドリングが可能
-- **セキュリティの多層化**：一つの層のバグや見落としがあっても他の層でカバー
+いずれの場合も、処理の想定外の入力を外接やデータベースに入れないことで、データ不整合を未然に防いだり、不正な入力として適切にハンドリングし、エラーメッセージを返すことができます。
 
 ---
 
 ### エラーハンドリング
 
 - エラーの種類に応じた適切な HTTP ステータスコードを返す
-  - **400 Bad Request**：クライアントのリクエストに問題がある
-  - **401 Unauthorized**：認証が必要
-  - **403 Forbidden**：権限がない
-  - **404 Not Found**：リソースが存在しない
-  - **500 Internal Server Error**：サーバー内部のエラー
+  - 400 番台：クライアントのリクエストに問題がある
+    - 基本的にはシステムに問題はなく、クライアント側からの入力がビジネスロジックに即していない → 入力の何が問題なのかをクライアントに提示し、ネクストアクションを促す。特に監視は不要
+      - **400 Bad Request**：クライアントのリクエストが不正
+      - **401 Unauthorized**：認証が必要
+      - **404 Not Found**：リソースが存在しない
+  - 500 番台：サーバー側の問題
+    - システム内部で問題が発生しているので、エラーを監視して、開発者が対応する必要がある
+      - **500 Internal Server Error**：サーバー内部のエラー
 
 ---
 
@@ -568,43 +564,7 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 }
 ```
 
-適切なエラーハンドリングは、クライアントに対して明確なフィードバックを提供し、デバッグを容易にします。また、セキュリティの観点からも重要です。
-
----
-
-### セキュリティに関する注意点
-
-- **入力は常に疑う**：すべてのユーザー入力は潜在的に危険
-- **内部エラーの詳細は隠す**：攻撃者に情報を与えない
-
-  ```go
-  // 悪い例
-  if err != nil {
-      http.Error(w, fmt.Sprintf("Database error: %v", err), http.StatusInternalServerError)
-  }
-
-  // 良い例
-  if err != nil {
-      log.Printf("Database error: %v", err) // 内部でログ記録
-      http.Error(w, "Internal server error", http.StatusInternalServerError) // ユーザーには最小限の情報
-  }
-  ```
-
-- **機密データの保護**：パスワードなどの機密情報は適切に保護
-  ```go
-  // パスワードのハッシュ化
-  hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-  ```
-
----
-
-### セキュリティ対策が不十分だと何が起きるか？
-
-- **データ漏洩**：顧客情報や機密情報の流出
-- **サービス停止**：DoS 攻撃によるシステムダウン
-- **データ改ざん**：不正なデータ操作
-- **権限昇格**：一般ユーザーが管理者権限を取得
-- **風評被害**：セキュリティインシデントによる信頼喪失と企業イメージの低下
+適切なエラーハンドリングは、クライアントに対して明確なフィードバックを提供し、デバッグを容易にします。
 
 ---
 
@@ -616,72 +576,110 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 
 ### 認証とは
 
-- **認証（Authentication）**：ユーザーが本人であることを確認するプロセス
-
-  - 「あなたは誰ですか？」という質問に答える
-
+- **認証（Authentication）**：ユーザーを識別するためのプロセス
 - **認可（Authorization）**：ユーザーが特定のリソースにアクセスする権限があるかを確認するプロセス
-  - 「あなたは何ができますか？」という質問に答える
 
 ---
 
-### JWT（JSON Web Token）とは
-
-- **JWT**：JSON 形式のデータを安全に転送するための標準規格
-- **構成**：
-  1. **ヘッダー**：トークンのタイプと使用しているアルゴリズム
-  2. **ペイロード**：クレーム（ユーザー ID などの情報）
-  3. **署名**：トークンが改ざんされていないことを確認するための署名
+例えば、前半で紹介した以下の実装
 
 ```go
-// internal/util/jwt.go
-type JWTClaims struct {
-    UserID   string `json:"user_id"`
-    Username string `json:"username"`
-    // 標準クレーム
-    ExpiresAt int64 `json:"exp"`
-    IssuedAt  int64 `json:"iat"`
-}
+mux.HandleFunc("/profile", func(w http.ResponseWriter, r *http.Request) {
+  name := r.URL.Query().Get("name")
+
+  email := getEmailByNameFromDB(name)
+
+  w.Write([]byte(email))
+})
+```
+
+ユーザー名さえわかれば、クエリに載せれば他人のメールアドレスでも取得できてしまう！
+
+→**ユーザーがアクセスできるリソース(情報)を制限する必要がある**
+
+---
+
+今回は、認証方式の代表例として、Web アプリケーションでよく使われる **JSON Web Token(JWT)** を題材に解説します！
+
+---
+
+### JSON Web Token(JWT)とは
+
+- JSON 形式のデータを安全に転送するための標準規格
+- **構成**：
+  1. **ヘッダー**：署名に使用しているアルゴリズム
+  2. **ペイロード**：トークンに記載されている内容(クレーム)
+  3. **署名**：トークンが改ざんされていないことを確認するための署名
+
+<br>
+
+<span style="color: #ff0000">ヘッダー</span>.<span style="color:rgb(255, 140, 60)">ペイロード</span>.<span style="color:rgb(50, 0, 255)">署名</span> の形で表現される。
+
+例
+
+```txt
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.
+eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiYWRtaW4iOnRydWUsImlhdCI6MTUxNjIzOTAyMn0.
+KMUFsIDTnFmyG3nMiGM6H9FNFUROf3wh7SmqJp-QV30
 ```
 
 ---
 
-### JWT の仕組み（コンピュータサイエンスの観点から）
+### JWT を用いた際のアクセスフロー
 
-JWT は暗号学的に安全なトークンを生成するための仕組みです。その処理は以下のように行われます：
+<div class="columns">
 
-1. **Base64URL エンコーディング**：ヘッダーとペイロードを JSON 形式で作成し、それぞれを Base64URL でエンコードします
-2. **HMAC または RSA/ECDSA による署名**：エンコードされたヘッダーとペイロードを連結し、秘密鍵を使って署名を生成します
-3. **トークンの組み立て**：`ヘッダー.ペイロード.署名` の形式で 3 つの部分を連結します
+<div>
+トークン取得時
+
+  <pre class="mermaid">
+  sequenceDiagram
+    autonumber
+    Client->>+Server: ユーザー認証リクエスト（ID/パスワード）
+    Server->>Server: 認証情報の検証
+    alt 認証成功
+      Server->>Server: JWTの生成（ユーザー情報、期限などを含む）
+      Server->>Client: JWT返却
+    else 認証失敗
+      Server->>-Client: 401 Unauthorized
+    end
+  </pre>
+
+</div>
+
+<div>
+APIアクセス時
+
+  <pre class="mermaid">
+  sequenceDiagram
+    autonumber
+    Client->>+Server: APIリクエスト + JWT
+    Server->>Server: JWTの検証
+    alt JWT有効
+      Server->>Server: リクエスト処理
+      Server->>Client: リソースやレスポンス返却
+    else JWT無効（期限切れ/改ざん等）
+      Server->>-Client: 401 Unauthorized
+    end
+  </pre>
+
+</div>
+
+</div>
+
+---
+
+### JWT の作成フロー
+
+1. ヘッダーとペイロードを JSON 形式で作成し、それぞれを Base64URL でエンコード
+2. エンコードされたヘッダーとペイロードを連結し、秘密鍵を使って署名を生成
+3. `ヘッダー.ペイロード.署名` の形式で 3 つの部分を連結
+
+---
+
+### JWT の検証フロー
 
 検証時には、受け取ったトークンを分解し、ヘッダーとペイロードから同じ方法で署名を再計算して、トークンに含まれる署名と一致するか確認します。これにより、トークンが改ざんされていないことを確認できます。
-
----
-
-### 認証方式の比較
-
-| 認証方式       | メリット                                                           | デメリット                                                 | 適した用途                                                       |
-| -------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------- |
-| **セッション** | ・サーバー側で完全に制御可能<br>・トークンの即時無効化が容易       | ・サーバーにセッション状態を保存<br>・スケーリングが難しい | ・単一サーバーのアプリケーション<br>・高セキュリティが必要な場合 |
-| **JWT**        | ・ステートレス<br>・スケーラビリティが高い<br>・クロスドメイン対応 | ・トークンの即時無効化が難しい<br>・ペイロードサイズの制限 | ・マイクロサービス<br>・分散システム<br>・SPA と API の連携      |
-| **OAuth**      | ・サードパーティ認証が可能<br>・権限の細かい制御                   | ・実装が複雑<br>・フロー管理が必要                         | ・サードパーティ連携<br>・API プラットフォーム                   |
-
----
-
-### JWT を使うべき場合
-
-- **マイクロサービスアーキテクチャ**：複数のサービス間で認証情報を共有する必要がある場合
-- **ステートレスな API サーバー**：サーバーがセッション状態を保持せず、水平スケーリングが必要な場合
-- **SPA（Single Page Application）**：フロントエンドとバックエンドが分離されている場合
-- **モバイルアプリケーション**：異なるプラットフォーム間で一貫した認証が必要な場合
-
----
-
-### JWT を避けるべき場合
-
-- **セッション無効化が頻繁に必要**：ユーザーのログアウトや権限変更が頻繁に発生する場合
-- **機密性の高いデータを扱う**：トークン自体に機密データを含める必要がある場合
-- **単一サーバーの小規模アプリケーション**：セッションベースの認証で十分な場合
 
 ---
 
@@ -757,62 +755,63 @@ func (m *JWTManager) Verify(token string) (*JWTClaims, error) {
 
 ---
 
-### 認証フロー
+実際のプロダクトには、上手にライブラリを使いましょう(学習目的以外では、車輪の再発明をしない)！
 
-1. **ユーザー登録**
+Go: <https://github.com/golang-jwt/jwt>
+Java: <https://github.com/jwtk/jjwt>
+Ruby: <https://github.com/jwt/ruby-jwt>
+...
 
-   ```go
-   // internal/usecase/user_usecase.go
-   func (uc *UserUseCase) Register(req RegisterRequest) (*RegisterResponse, error) {
-       // パスワードのハッシュ化
-       hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
-       // ユーザー情報の保存
-       // ...
-   }
-   ```
+他にもいろいろ！ <https://jwt.io/libraries>
 
 ---
 
-2. **ログイン（認証）**
+### 認証方式の比較
 
-   ```go
-   // internal/usecase/user_usecase.go
-   func (uc *UserUseCase) Login(req LoginRequest) (*LoginResponse, error) {
-       // ユーザー検索
-       user, err := uc.userRepo.FindByUsername(req.Username)
-       // パスワード検証
-       if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
-           return nil, ErrInvalidCredentials
-       }
-       // JWTトークン生成
-       token, err := uc.jwtManager.Generate(user.ID, user.Username)
-       // ...
-   }
-   ```
+<div style="font-size:21px;">
+
+| 認証方式       | メリット                                                           | デメリット                                                 | 適した用途                                                       |
+| -------------- | ------------------------------------------------------------------ | ---------------------------------------------------------- | ---------------------------------------------------------------- |
+| **セッション** | ・サーバー側で完全に制御可能<br>・トークンの即時無効化が容易       | ・サーバーにセッション状態を保存<br>・スケーリングが難しい | ・単一サーバーのアプリケーション<br>・高セキュリティが必要な場合 |
+| **JWT**        | ・ステートレス<br>・スケーラビリティが高い<br>・クロスドメイン対応 | ・トークンの即時無効化が難しい<br>・ペイロードサイズの制限 | ・マイクロサービス<br>・分散システム<br>・SPA と API の連携      |
+| **OAuth**      | ・サードパーティ認証が可能<br>・権限の細かい制御                   | ・実装が複雑<br>・フロー管理が必要                         | ・サードパーティ連携<br>・API プラットフォーム                   |
+
+</div>
 
 ---
 
-3. **保護されたリソースへのアクセス**
+### JWT の使い分け
 
-   ```go
-   // internal/interface/handler/user_handler.go
-   func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
-       // トークンの抽出と検証
-       claims, err := h.jwtManager.Verify(token)
-       // アクセス制御
-       if claims.UserID != userID {
-           http.Error(w, "Unauthorized access", http.StatusForbidden)
-           return
-       }
-       // ...
-   }
-   ```
+- JWT を使うべき場合
+  - マイクロサービスアーキテクチャなど、複数サーバーで認証情報をやりとりする必要がある場合
+  - サーバーがセッション状態を保持せず、水平スケーリングが必要な場合
+- JWT を避けるべき場合
+  - トークン自体に機密データを含める必要がある場合(情報自体はデコードすれば見れてしまうため)
+
+---
+
+### 適切な認証を用いた API アクセスの例
+
+```go
+// internal/interface/handler/user_handler.go
+func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
+  // ...
+  // トークンの抽出と検証
+  claims, err := h.jwtManager.Verify(token)
+
+  // 認証情報から得られたユーザーIDを用いることで、第三者の情報を取得できないようにする
+  resp, err := h.userUseCase.GetUser(usecase.GetUserRequest{ID: claims.UserID})
+  if err != nil {
+    http.Error(w, err.Error(), http.StatusNotFound)
+    return
+  }
+  // ...
+}
+```
 
 ---
 
 ## まとめ
-
-### 今日学んだこと
 
 1. **関数の責務を捉える**
 
@@ -843,21 +842,10 @@ func (m *JWTManager) Verify(token string) (*JWTClaims, error) {
 
 ---
 
-![bg 80%](./summer_internship_summer_internship_engineer.png)
-
----
-
-**サマーインターンやります！**
-
-**7/6 締め切りなので急いで！**
-
-![bg 80% opacity:.5](./summer_internship_summer_internship_engineer.png)
-
----
-
 ## ご清聴ありがとうございました！
 
 質問やフィードバックがあればお気軽にどうぞ！
+
 例）
 
 - 「自分なりにコード書いてみたのでレビューしてください！」
@@ -867,3 +855,7 @@ X の DM でも受け付けています！→
 ![bg right:35% width:450px](./x.png)
 
 教材のリポジトリ：<https://github.com/noritama73/basic-http-server>
+
+---
+
+## Q&A
