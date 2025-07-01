@@ -45,7 +45,7 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 - [2024 Japan AWS Jr.Champions](https://aws.amazon.com/jp/blogs/psa/2024-japan-aws-jr-champions-report/)
 - 趣味は料理・マラソン
 
-## ![bg right:40%](./TAKUMA.jpeg)
+![bg right:40%](./TAKUMA.jpeg)
 
 ---
 
@@ -831,10 +831,14 @@ func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 
 ### 次のステップ
 
-- **学んだ概念を自分のプロジェクトに適用してみる**
-- **他の認証方式（OAuth、多要素認証など）について学ぶ**
-- **より複雑なユースケースでの実装を試みる**
-- **テストの書き方を学び、堅牢なコードを目指す**
+- **学んだ概念を自分のプロダクトに適用してみる**
+  - 「ここの処理は単一の責務として切り出せないだろうか？」
+  - 「もしこういうデータパターンが来たら、想定外のことは起きないだろうか？」
+  - 「見えてはいけないデータが見れてしまうつくりになっていないだろうか？」
+
+---
+
+**「想定外」を漏れなく潰せるエンジニアは、「システムに強い」エンジニアの一人です！**
 
 ---
 

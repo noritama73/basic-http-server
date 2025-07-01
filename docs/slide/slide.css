@@ -38,6 +38,14 @@ section.slides h1 {
   top: 50px;
 }
 
+h2 {
+  background: linear-gradient(transparent 10%, #acaaff 90%);
+}
+
+h3 {
+  background: linear-gradient(transparent 90%, #000000 90%);
+}
+
 section.slides h2 {
   font-size: 32px;
   color: #4ac;
