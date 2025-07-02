@@ -26,7 +26,7 @@ Takuma Kobayashi ([@takuma5884rbb](https://x.com/takuma5884rbb))
 
 - 自己紹介
 - 今日学んで欲しいこと
-- リクエストを受け取る
+- 関数の責務を考える
 - 異常系を考える
 - 認証
 - まとめ
@@ -445,6 +445,12 @@ mux.HandleFunc("/article", func(w http.ResponseWriter, r *http.Request) {
 
 ---
 
+## 関数の責務を考える
+
+おわり
+
+---
+
 ## 適切なリクエスト処理とバリデーション
 
 HTTP サーバーを実装する上で、リクエスト処理とバリデーションは非常に重要です。適切なバリデーションがないと、不正なデータがシステムに入り込み、様々な問題を引き起こす可能性があります。
@@ -565,6 +571,12 @@ func (h *UserHandler) LoginHandler(w http.ResponseWriter, r *http.Request) {
 ```
 
 適切なエラーハンドリングは、クライアントに対して明確なフィードバックを提供し、デバッグを容易にします。
+
+---
+
+## 適切なリクエスト処理とバリデーション
+
+おわり
 
 ---
 
@@ -812,6 +824,12 @@ func (h *UserHandler) GetUserHandler(w http.ResponseWriter, r *http.Request) {
 ```
 
 このように、認証情報から得られたユーザー ID を使用することで、ユーザーは自分自身の情報のみにアクセスできるようになります。
+
+---
+
+## 認証
+
+おわり
 
 ---
 
